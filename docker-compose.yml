@@ -60,6 +60,29 @@ services:
       - ./prisma:/app/prisma
     command: sh -c "npx prisma migrate deploy && npm run start"
 
+  # Worker (BullMQ)
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: salic_worker
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://salic_user:salic_password@postgres:5432/salic_produtos?schema=public
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      WORKER_CONCURRENCY: 3
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./src:/app/src
+      - ./prisma:/app/prisma
+    command: sh -c "npm run start:worker"
+
 volumes:
   postgres_data:
   redis_data:

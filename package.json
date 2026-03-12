@@ -4,8 +4,15 @@
   "private": true,
   "scripts": {
     "dev": "tsx watch src/server.ts",
+    "dev:worker": "tsx watch src/worker.ts",
     "build": "tsc",
     "start": "node dist/server.js",
+    "start:worker": "node dist/worker.js",
+    "test": "jest",
+    "test:unit": "jest tests/unit",
+    "test:integration": "jest tests/integration --runInBand",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
@@ -13,16 +20,23 @@
   },
   "dependencies": {
     "@prisma/client": "^5.9.1",
-    "fastify": "^4.26.0",
     "bullmq": "^5.1.7",
-    "ioredis": "^5.3.2",
     "dotenv": "^16.4.1",
+    "fastify": "^4.26.0",
+    "ioredis": "^5.3.2",
     "node-cron": "^3.0.3"
   },
   "devDependencies": {
+    "@faker-js/faker": "^10.3.0",
+    "@testcontainers/postgresql": "^11.12.0",
+    "@types/jest": "^30.0.0",
     "@types/node": "^20.11.16",
     "@types/node-cron": "^3.0.11",
+    "ioredis-mock": "^8.13.1",
+    "jest": "^30.3.0",
     "prisma": "^5.9.1",
+    "testcontainers": "^11.12.0",
+    "ts-jest": "^29.4.6",
     "tsx": "^4.7.0",
     "typescript": "^5.3.3"
   }
