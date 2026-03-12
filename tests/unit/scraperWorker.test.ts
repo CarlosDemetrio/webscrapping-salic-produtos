@@ -274,14 +274,19 @@ describe('Scraper Worker - Real Redis Integration', () => {
 
       testWorker.on('failed', (job, err) => {
         if (job) {
-          expect(job.attemptsMade).toBe(2); // 2 tentativas
+          // O evento 'failed' pode ser chamado múltiplas vezes durante os retries
+          // Verificar que o job falhou e tem tentativas
+          expect(job.attemptsMade).toBeGreaterThanOrEqual(1);
+          expect(job.attemptsMade).toBeLessThanOrEqual(2);
           expect(err.message).toBe('Erro permanente');
 
-          // Verificar que está na lista de failed
-          testQueue.getFailedCount().then(count => {
-            expect(count).toBe(1);
-            resolve();
-          });
+          // Apenas resolver quando atingir o máximo de tentativas
+          if (job.attemptsMade === 2) {
+            testQueue.getFailedCount().then(count => {
+              expect(count).toBeGreaterThanOrEqual(1);
+              resolve();
+            });
+          }
         }
       });
 

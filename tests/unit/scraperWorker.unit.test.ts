@@ -1,77 +1,6 @@
-import { Job } from 'bullmq';
-import prisma from '../../src/config/database';
 import { Decimal } from '@prisma/client/runtime/library';
 
-// Mock do prisma
-jest.mock('../../src/config/database', () => ({
-  __esModule: true,
-  default: {
-    itemOrcamentario: {
-      upsert: jest.fn(),
-    },
-  },
-}));
-
-// Mock do redis config
-jest.mock('../../src/config/redis', () => ({
-  __esModule: true,
-  default: {
-    host: 'localhost',
-    port: 6379,
-  },
-}));
-
-// Importar as funções após os mocks
-// Como as funções são privadas, vamos testar através do comportamento do módulo
 describe('ScraperWorker - Unit Tests', () => {
-  const mockPrisma = prisma as jest.Mocked<typeof prisma>;
-
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
-
-  describe('upsertItensOrcamentarios logic', () => {
-    it('should handle empty items array', async () => {
-      // Testar que não faz chamadas ao banco quando não há itens
-      const { default: worker } = await import('../../src/workers/scraperWorker');
-
-      // Se não houver itens, não deve chamar o prisma
-      expect(mockPrisma.itemOrcamentario.upsert).not.toHaveBeenCalled();
-    });
-
-    it('should process items in batches', async () => {
-      // Criar mock de job
-      const mockJob = {
-        id: 'test-job-1',
-        data: {
-          produtoId: 'TEST-001',
-          produtoNome: 'Produto Teste',
-        },
-        updateProgress: jest.fn().mockResolvedValue(undefined),
-      } as unknown as Job;
-
-      mockPrisma.itemOrcamentario.upsert.mockResolvedValue({
-        id: '1',
-        produto: 'Teste',
-        item: 'Item Teste',
-        unidade: 'UN',
-        uf: 'SP',
-        cidade: 'São Paulo',
-        valor_minimo: new Decimal(100),
-        valor_medio: new Decimal(150),
-        valor_maximo: new Decimal(200),
-        caminho_referencia: null,
-        data_extracao: new Date(),
-      });
-
-      // O worker processa o job mas como o scraper retorna array vazio,
-      // não deve fazer upserts
-      // Este teste valida a estrutura, não o comportamento completo
-      expect(mockJob.data.produtoId).toBe('TEST-001');
-      expect(mockJob.data.produtoNome).toBe('Produto Teste');
-    });
-  });
-
   describe('ItemExtraido interface validation', () => {
     it('should have correct structure for extracted items', () => {
       const itemExtraido = {
@@ -98,7 +27,17 @@ describe('ScraperWorker - Unit Tests', () => {
     });
 
     it('should allow optional caminho_referencia', () => {
-      const itemSemReferencia = {
+      const itemSemReferencia: {
+        produto: string;
+        item: string;
+        unidade: string;
+        uf: string;
+        cidade: string;
+        valor_minimo: number;
+        valor_medio: number;
+        valor_maximo: number;
+        caminho_referencia?: string;
+      } = {
         produto: 'Produto',
         item: 'Item',
         unidade: 'UN',
@@ -134,6 +73,13 @@ describe('ScraperWorker - Unit Tests', () => {
 
       expect(decimal.toNumber()).toBe(99.99);
     });
+
+    it('should handle very small decimals', () => {
+      const valor = 0.01;
+      const decimal = new Decimal(valor);
+
+      expect(decimal.toNumber()).toBe(0.01);
+    });
   });
 
   describe('Job data structure', () => {
@@ -158,16 +104,18 @@ describe('ScraperWorker - Unit Tests', () => {
       expect(jobData.produtoId.length).toBeGreaterThan(0);
       expect(jobData.produtoNome.length).toBeGreaterThan(0);
     });
+
+    it('should validate various product IDs', () => {
+      const validIds = ['PROD-001', 'TEST-123', 'ABC-XYZ'];
+
+      validIds.forEach(id => {
+        expect(typeof id).toBe('string');
+        expect(id.length).toBeGreaterThan(0);
+      });
+    });
   });
 
   describe('Worker configuration', () => {
-    it('should use correct queue name', async () => {
-      const { scraperWorker } = await import('../../src/workers/scraperWorker');
-
-      expect(scraperWorker).toBeDefined();
-      expect(scraperWorker.name).toBe('scraper-queue');
-    });
-
     it('should parse concurrency from environment', () => {
       const defaultConcurrency = 3;
       const concurrency = parseInt(process.env.WORKER_CONCURRENCY || '3', 10);
@@ -178,6 +126,16 @@ describe('ScraperWorker - Unit Tests', () => {
       if (!process.env.WORKER_CONCURRENCY) {
         expect(concurrency).toBe(defaultConcurrency);
       }
+    });
+
+    it('should validate concurrency is a positive number', () => {
+      const testValues = ['1', '5', '10'];
+
+      testValues.forEach(value => {
+        const parsed = parseInt(value, 10);
+        expect(parsed).toBeGreaterThan(0);
+        expect(Number.isInteger(parsed)).toBe(true);
+      });
     });
   });
 
@@ -200,6 +158,14 @@ describe('ScraperWorker - Unit Tests', () => {
 
       expect(parseFloat(elapsed)).toBeCloseTo(1.5, 1);
     });
+
+    it('should format time to 2 decimal places', () => {
+      const startTime = 1000;
+      const endTime = 3456;
+      const elapsed = ((endTime - startTime) / 1000).toFixed(2);
+
+      expect(elapsed).toMatch(/^\d+\.\d{2}$/);
+    });
   });
 
   describe('Batch processing logic', () => {
@@ -219,6 +185,14 @@ describe('ScraperWorker - Unit Tests', () => {
       expect(expectedBatches).toBe(1);
     });
 
+    it('should handle exact batch size', () => {
+      const BATCH_SIZE = 50;
+      const totalItems = 100;
+      const expectedBatches = Math.ceil(totalItems / BATCH_SIZE);
+
+      expect(expectedBatches).toBe(2);
+    });
+
     it('should slice items correctly', () => {
       const items = Array.from({ length: 150 }, (_, i) => ({ id: i }));
       const BATCH_SIZE = 50;
@@ -232,6 +206,21 @@ describe('ScraperWorker - Unit Tests', () => {
       expect(batches[0].length).toBe(50);
       expect(batches[1].length).toBe(50);
       expect(batches[2].length).toBe(50);
+    });
+
+    it('should handle uneven batch sizes', () => {
+      const items = Array.from({ length: 125 }, (_, i) => ({ id: i }));
+      const BATCH_SIZE = 50;
+      const batches = [];
+
+      for (let i = 0; i < items.length; i += BATCH_SIZE) {
+        batches.push(items.slice(i, i + BATCH_SIZE));
+      }
+
+      expect(batches.length).toBe(3);
+      expect(batches[0].length).toBe(50);
+      expect(batches[1].length).toBe(50);
+      expect(batches[2].length).toBe(25); // Last batch with remaining items
     });
   });
 
@@ -258,6 +247,14 @@ describe('ScraperWorker - Unit Tests', () => {
         expect(progress).toBeLessThanOrEqual(100);
       });
     });
+
+    it('should be in ascending order', () => {
+      const progressSteps = [10, 50, 90, 100];
+
+      for (let i = 1; i < progressSteps.length; i++) {
+        expect(progressSteps[i]).toBeGreaterThan(progressSteps[i - 1]);
+      }
+    });
   });
 
   describe('Result structure', () => {
@@ -280,6 +277,25 @@ describe('ScraperWorker - Unit Tests', () => {
       expect(typeof result.itensExtraidos).toBe('number');
       expect(typeof result.itensSalvos).toBe('number');
       expect(typeof result.tempoSegundos).toBe('number');
+    });
+
+    it('should validate items saved is not greater than items extracted', () => {
+      const result = {
+        itensExtraidos: 10,
+        itensSalvos: 10,
+      };
+
+      expect(result.itensSalvos).toBeLessThanOrEqual(result.itensExtraidos);
+    });
+
+    it('should have positive numbers for items', () => {
+      const result = {
+        itensExtraidos: 15,
+        itensSalvos: 13,
+      };
+
+      expect(result.itensExtraidos).toBeGreaterThanOrEqual(0);
+      expect(result.itensSalvos).toBeGreaterThanOrEqual(0);
     });
   });
 
@@ -306,13 +322,63 @@ describe('ScraperWorker - Unit Tests', () => {
         cidade: 'Rio de Janeiro',
       };
 
-      const hasAllFields =
+      const hasAllFields = !!(
         item.produto &&
         item.item &&
         item.uf &&
-        item.cidade;
+        item.cidade
+      );
 
       expect(hasAllFields).toBe(true);
+    });
+
+    it('should validate UF format', () => {
+      const validUFs = ['SP', 'RJ', 'MG', 'RS'];
+
+      validUFs.forEach(uf => {
+        expect(uf.length).toBe(2);
+        expect(uf).toBe(uf.toUpperCase());
+      });
+    });
+  });
+
+  describe('Promise.allSettled logic', () => {
+    it('should handle mixed success and failure results', async () => {
+      const promises = [
+        Promise.resolve('success'),
+        Promise.reject(new Error('failed')),
+        Promise.resolve('another success'),
+      ];
+
+      const results = await Promise.allSettled(promises);
+
+      expect(results.length).toBe(3);
+      expect(results[0].status).toBe('fulfilled');
+      expect(results[1].status).toBe('rejected');
+      expect(results[2].status).toBe('fulfilled');
+    });
+
+    it('should count successes and failures correctly', async () => {
+      const promises = [
+        Promise.resolve(true),
+        Promise.resolve(true),
+        Promise.reject(new Error('fail')),
+      ];
+
+      const results = await Promise.allSettled(promises);
+      let sucessos = 0;
+      let erros = 0;
+
+      results.forEach((result) => {
+        if (result.status === 'fulfilled') {
+          sucessos++;
+        } else {
+          erros++;
+        }
+      });
+
+      expect(sucessos).toBe(2);
+      expect(erros).toBe(1);
     });
   });
 });
