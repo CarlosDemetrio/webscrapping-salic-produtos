@@ -1,12 +1,30 @@
 import { Worker, Job } from 'bullmq';
 import redisConfig from '../config/redis';
 import { ScraperJobData } from '../queue/scraperQueue';
+import prisma from '../config/database';
+import { Decimal } from '@prisma/client/runtime/library';
+
+// Interface para os dados extraídos do scraper
+interface ItemExtraido {
+  produto: string;
+  item: string;
+  unidade: string;
+  uf: string;
+  cidade: string;
+  valor_minimo: number;
+  valor_medio: number;
+  valor_maximo: number;
+  caminho_referencia?: string;
+}
 
 // Configuração de concorrência - quantos jobs simultâneos o worker pode processar
 const CONCURRENCY = parseInt(process.env.WORKER_CONCURRENCY || '3', 10);
 
 // Função placeholder para o scraper (você colará seu código Selenium/Puppeteer aqui)
-async function executarScraperSelenium(produtoId: string, produtoNome: string) {
+async function executarScraperSelenium(
+  produtoId: string,
+  produtoNome: string
+): Promise<ItemExtraido[]> {
   console.log(` [PLACEHOLDER] Iniciando scraping para: ${produtoNome} (ID: ${produtoId})`);
 
   // AQUI VOCÊ COLARÁ SEU CÓDIGO DO SELENIUM/PUPPETEER
@@ -31,36 +49,145 @@ async function executarScraperSelenium(produtoId: string, produtoNome: string) {
   return []; // Retornar array vazio por enquanto
 }
 
+/**
+ * Função para fazer Upsert massivo dos itens extraídos
+ * Atualiza se o item já existe (baseado na constraint unique_item_location)
+ * ou cria um novo registro se não existir
+ */
+async function upsertItensOrcamentarios(itens: ItemExtraido[]): Promise<number> {
+  if (itens.length === 0) {
+    console.log('   Nenhum item para persistir');
+    return 0;
+  }
+
+  console.log(`   Iniciando upsert de ${itens.length} itens no banco de dados...`);
+
+  let sucessos = 0;
+  let erros = 0;
+
+  // Processar em lotes para melhor performance
+  const BATCH_SIZE = 50;
+
+  for (let i = 0; i < itens.length; i += BATCH_SIZE) {
+    const lote = itens.slice(i, i + BATCH_SIZE);
+
+    // Processar cada item do lote em paralelo
+    const resultados = await Promise.allSettled(
+      lote.map(async (item) => {
+        try {
+          await prisma.itemOrcamentario.upsert({
+            where: {
+              unique_item_location: {
+                produto: item.produto,
+                item: item.item,
+                uf: item.uf,
+                cidade: item.cidade,
+              },
+            },
+            update: {
+              unidade: item.unidade,
+              valor_minimo: new Decimal(item.valor_minimo),
+              valor_medio: new Decimal(item.valor_medio),
+              valor_maximo: new Decimal(item.valor_maximo),
+              caminho_referencia: item.caminho_referencia,
+              data_extracao: new Date(),
+            },
+            create: {
+              produto: item.produto,
+              item: item.item,
+              unidade: item.unidade,
+              uf: item.uf,
+              cidade: item.cidade,
+              valor_minimo: new Decimal(item.valor_minimo),
+              valor_medio: new Decimal(item.valor_medio),
+              valor_maximo: new Decimal(item.valor_maximo),
+              caminho_referencia: item.caminho_referencia,
+              data_extracao: new Date(),
+            },
+          });
+          return true;
+        } catch (error) {
+          console.error('   Erro ao fazer upsert do item:', error);
+          throw error;
+        }
+      })
+    );
+
+    // Contar sucessos e erros
+    resultados.forEach((result) => {
+      if (result.status === 'fulfilled') {
+        sucessos++;
+      } else {
+        erros++;
+        console.error('   Item falhou:', result.reason);
+      }
+    });
+
+    console.log(`   Lote ${Math.floor(i / BATCH_SIZE) + 1}: ${sucessos}/${i + lote.length} itens processados`);
+  }
+
+  console.log(`   Upsert concluído: ${sucessos} sucessos, ${erros} erros`);
+  return sucessos;
+}
+
 // Função de processamento do job
 async function processScraperJob(job: Job<ScraperJobData>) {
   const { produtoId, produtoNome } = job.data;
+  const startTime = Date.now();
 
   try {
+    console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
     console.log(` Worker processando job ${job.id}: ${produtoNome}`);
+    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
 
     // Atualizar progresso: 10% - Iniciando
     await job.updateProgress(10);
 
-    // Executar o scraper (placeholder por enquanto)
+    // PASSO 1: Executar o scraper
+    console.log(` [1/3] Executando scraper...`);
     const itensExtraidos = await executarScraperSelenium(produtoId, produtoNome);
-
-    // Atualizar progresso: 70% - Dados extraídos
-    await job.updateProgress(70);
-
-    // TODO: FASE 3 - Aqui implementaremos o Upsert massivo no banco
     console.log(` Extração concluída: ${itensExtraidos.length} itens encontrados`);
+
+    // Atualizar progresso: 50% - Dados extraídos
+    await job.updateProgress(50);
+
+    // PASSO 2: Persistir no banco de dados (Upsert massivo)
+    console.log(` [2/3] Persistindo dados no banco...`);
+    const itensSalvos = await upsertItensOrcamentarios(itensExtraidos);
+
+    // Atualizar progresso: 90% - Dados salvos
+    await job.updateProgress(90);
+
+    // PASSO 3: Finalização
+    const tempoDecorrido = ((Date.now() - startTime) / 1000).toFixed(2);
+    console.log(` [3/3] Job concluído com sucesso!`);
+    console.log(` Tempo total: ${tempoDecorrido}s`);
+    console.log(` Itens extraídos: ${itensExtraidos.length}`);
+    console.log(` Itens salvos: ${itensSalvos}`);
+    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
 
     // Atualizar progresso: 100% - Concluído
     await job.updateProgress(100);
 
     return {
       success: true,
+      produtoId,
       produtoNome,
-      itensCount: itensExtraidos.length,
+      itensExtraidos: itensExtraidos.length,
+      itensSalvos,
+      tempoSegundos: parseFloat(tempoDecorrido),
     };
   } catch (error) {
-    console.error(` Erro ao processar job ${job.id}:`, error);
-    throw error; // Lançar erro para o BullMQ gerenciar retries
+    const tempoDecorrido = ((Date.now() - startTime) / 1000).toFixed(2);
+    console.error(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    console.error(` ERRO no job ${job.id} (${produtoNome})`);
+    console.error(` Tempo até falha: ${tempoDecorrido}s`);
+    console.error(` Erro:`, error);
+    console.error(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
+
+    // Lançar erro para o BullMQ gerenciar retries
+    // O BullMQ irá automaticamente retentar o job conforme configurado na queue
+    throw error;
   }
 }
 

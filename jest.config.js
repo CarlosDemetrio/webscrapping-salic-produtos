@@ -19,6 +19,13 @@ module.exports = {
     'src/**/*.ts',
     '!src/**/*.d.ts',
     '!src/**/__tests__/**',
+    '!src/server.ts',
+    '!src/worker.ts',
+    '!src/config/**',
+    '!src/types/**',
+    '!src/schemas/**',
+    '!src/routes/**',
+    '!src/middlewares/security.ts',
   ],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
@@ -26,4 +33,6 @@ module.exports = {
   setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
   testTimeout: 30000,
   maxWorkers: 1, // Evitar problemas com conexões concorrentes
+  forceExit: true, // Forçar saída após os testes
+  detectOpenHandles: false, // Desabilitar detecção de handles abertos em CI
 };

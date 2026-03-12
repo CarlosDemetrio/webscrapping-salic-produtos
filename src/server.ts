@@ -1,69 +1,129 @@
 import 'dotenv/config';
 import Fastify from 'fastify';
-import scraperQueue from './queue/scraperQueue';
+import swagger from '@fastify/swagger';
+import swaggerUi from '@fastify/swagger-ui';
+import routes from './routes';
+import { registerSecurityPlugins } from './middlewares/security';
+import { errorHandler } from './middlewares/errorHandler';
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
+const NODE_ENV = process.env.NODE_ENV || 'development';
 
-const app = Fastify({
-  logger: true,
-});
-
-// Health check endpoint
-app.get('/health', async () => {
-  return {
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    phase: 'FASE 2 - Queue Architecture (BullMQ + Redis)'
-  };
-});
-
-// Queue status endpoint
-app.get('/api/queue/status', async () => {
-  const [waiting, active, completed, failed, delayed] = await Promise.all([
-    scraperQueue.getWaitingCount(),
-    scraperQueue.getActiveCount(),
-    scraperQueue.getCompletedCount(),
-    scraperQueue.getFailedCount(),
-    scraperQueue.getDelayedCount(),
-  ]);
-
-  return {
-    queue: 'scraper-queue',
-    counts: {
-      waiting,
-      active,
-      completed,
-      failed,
-      delayed,
-      total: waiting + active + completed + failed + delayed,
+/**
+ * Configuração do Swagger/OpenAPI
+ */
+const swaggerOptions = {
+  openapi: {
+    openapi: '3.0.0',
+    info: {
+      title: 'SALIC Web Scraping API',
+      description: 'API para busca de dados orçamentários do SALIC com Full Text Search',
+      version: '1.0.0',
+      contact: {
+        name: 'API Support',
+      },
     },
-    timestamp: new Date().toISOString(),
-  };
-});
+    servers: [
+      {
+        url: `http://localhost:${PORT}`,
+        description: 'Development server',
+      },
+    ],
+    tags: [
+      { name: 'Health', description: 'Health check endpoints' },
+      { name: 'Search', description: 'Full Text Search endpoints' },
+      { name: 'Queue', description: 'Queue management endpoints' },
+    ],
+  },
+};
 
-// Start server
-const start = async () => {
+const swaggerUiOptions = {
+  routePrefix: '/docs',
+  uiConfig: {
+    docExpansion: 'list' as const,
+    deepLinking: false,
+  },
+  staticCSP: true,
+};
+
+/**
+ * Cria e configura a instância do Fastify
+ */
+async function createServer() {
+  const app = Fastify({
+    logger: {
+      level: NODE_ENV === 'development' ? 'debug' : 'info',
+      transport: NODE_ENV === 'development' ? {
+        target: 'pino-pretty',
+        options: {
+          translateTime: 'HH:MM:ss Z',
+          ignore: 'pid,hostname',
+        },
+      } : undefined,
+    },
+    trustProxy: true,
+    disableRequestLogging: NODE_ENV === 'production',
+  });
+
+  // Registrar plugins de segurança (rate limit, helmet, cors)
+  await registerSecurityPlugins(app);
+
+  // Registrar Swagger
+  if (NODE_ENV !== 'test') {
+    await app.register(swagger, swaggerOptions);
+    await app.register(swaggerUi, swaggerUiOptions);
+  }
+
+  // Registrar error handler global
+  app.setErrorHandler(errorHandler);
+
+  // Registrar todas as rotas
+  await app.register(routes);
+
+  return app;
+}
+
+/**
+ * Inicializa o servidor
+ */
+async function start() {
+  const app = await createServer();
+
   try {
+    // Iniciar servidor
     await app.listen({ port: PORT, host: '0.0.0.0' });
+
     console.log(`
-    ╔════════════════════════════════════════════════════════════╗
-    ║   SALIC Web Scraping API - FASE 2 COMPLETA                 ║
-    ║                                                            ║
-    ║  Server running on: http://localhost:${PORT}               ║
-    ║  Health check: http://localhost:${PORT}/health             ║
-    ║  Queue status: http://localhost:${PORT}/api/queue/status   ║
-    ║                                                            ║
-    ║   PostgreSQL com Full Text Search (pg_trgm)                ║
-    ║   Redis + BullMQ configurado                               ║
-    ║   Fila de scraping criada (scraper-queue)                  ║
-    ║   Worker pronto para processar jobs                        ║
-    ║   Concorrência ajustável via env                           ║
-    ╚════════════════════════════════════════════════════════════╝
+    ╔═════════════════════════════════════════════════════════════╗
+    ║   SALIC Web Scraping API - PRODUÇÃO READY 🚀                ║
+    ║                                                             ║
+    ║  🌐 Server: http://localhost:${PORT}                        ║
+    ║  📚 Docs: http://localhost:${PORT}/docs                     ║
+    ║  ❤️  Health: http://localhost:${PORT}/health                ║
+    ║  📊 Queue: http://localhost:${PORT}/api/queue/status        ║
+    ║  🔍 Search: GET http://localhost:${PORT}/api/search?q=termo ║
+    ║                                                             ║
+    ║  ✅ PostgreSQL + Full Text Search (pg_trgm + GIN)           ║
+    ║  ✅ Redis + BullMQ com workers paralelos                    ║
+    ║  ✅ Arquitetura SOLID e Clean Code                          ║
+    ║  ✅ Rate Limiting (100 req/min global)                      ║
+    ║  ✅ Security Headers (Helmet)                               ║
+    ║  ✅ CORS configurado                                        ║
+    ║  ✅ Error Handler global                                    ║
+    ║  ✅ Swagger/OpenAPI docs                                    ║
+    ║  ✅ Schema validation                                       ║
+    ╚═════════════════════════════════════════════════════════════╝
     `);
   } catch (err) {
     app.log.error(err);
     process.exit(1);
   }
-};
+}
 
-start();
+// Executar apenas se for o arquivo principal
+if (require.main === module) {
+  start();
+}
+
+export { createServer };
+
