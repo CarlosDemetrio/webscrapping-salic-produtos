@@ -1,4 +1,5 @@
 import scraperQueue from '../queue/scraperQueue';
+import { enfileirarTodosProdutos, obterStatusBatch } from '../maestro/maestro';
 
 /**
  * Service para gerenciamento da fila de scraping
@@ -45,6 +46,24 @@ export class QueueService {
       jobId: job.id,
       data: job.data,
     };
+  }
+
+  /**
+   * Dispara o scraping completo de todos os produtos
+   * Função Maestro - enfileira os 53 produtos
+   */
+  async triggerFullScraping(source: string = 'manual') {
+    const batchId = `${source}-${Date.now()}`;
+    const result = await enfileirarTodosProdutos(batchId);
+    return result;
+  }
+
+  /**
+   * Obtém o status de um batch específico
+   */
+  async getBatchStatus(batchId: string) {
+    const status = await obterStatusBatch(batchId);
+    return status;
   }
 }
 
