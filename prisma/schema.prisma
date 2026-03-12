@@ -1,0 +1,35 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model ItemOrcamentario {
+  id                 String   @id @default(uuid())
+  produto            String   @db.VarChar(255)
+  item               String   @db.VarChar(500)
+  unidade            String   @db.VarChar(50)
+  uf                 String   @db.VarChar(2)
+  cidade             String   @db.VarChar(255)
+  valor_minimo       Decimal  @db.Decimal(15, 2)
+  valor_medio        Decimal  @db.Decimal(15, 2)
+  valor_maximo       Decimal  @db.Decimal(15, 2)
+  caminho_referencia String?  @db.Text
+  data_extracao      DateTime @default(now())
+
+  // Índices para melhorar performance de queries
+  @@index([produto])
+  @@index([uf])
+  @@index([cidade])
+
+  // Constraint de unicidade para prevenir duplicatas e permitir Upsert
+  @@unique([produto, item, uf, cidade], name: "unique_item_location")
+
+  @@map("itens_orcamentarios")
+}
