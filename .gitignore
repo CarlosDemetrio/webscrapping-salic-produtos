@@ -7,7 +7,7 @@ yarn-error.log*
 # Build output
 dist/
 build/
-
+coverage
 # Environment
 .env
 .env.local
