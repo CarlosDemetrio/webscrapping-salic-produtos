@@ -5,9 +5,13 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "dev:worker": "tsx watch src/worker.ts",
+    "dev:scraper": "tsx watch src/scraper/index.ts",
+    "scraper": "tsx src/scraper/run.ts",
+    "scraper:build": "tsc && node dist/scraper/run.js",
     "build": "tsc",
     "start": "node dist/server.js",
     "start:worker": "node dist/worker.js",
+    "start:scraper": "node dist/scraper/index.js",
     "test": "jest",
     "test:unit": "jest tests/unit",
     "test:integration": "jest tests/integration --runInBand",
@@ -25,11 +29,14 @@
     "@fastify/swagger": "^9.7.0",
     "@fastify/swagger-ui": "^5.2.5",
     "@prisma/client": "^5.9.1",
+    "@types/selenium-webdriver": "^4.35.5",
     "bullmq": "^5.1.7",
+    "cheerio": "^1.2.0",
     "dotenv": "^16.4.1",
     "fastify": "^4.26.0",
     "ioredis": "^5.3.2",
-    "node-cron": "^3.0.3"
+    "node-cron": "^3.0.3",
+    "selenium-webdriver": "^4.41.0"
   },
   "devDependencies": {
     "@faker-js/faker": "^10.3.0",
