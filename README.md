@@ -62,31 +62,33 @@ Documentation at `http://localhost:3000/docs`
 │                    Fastify API Server                        │
 │  - Rate Limiting (100 req/min)                              │
 │  - Security Headers (Helmet)                                │
+│  - Prometheus Metrics (/metrics)                            │
 │  - Request Validation                                       │
 │  - Swagger Docs (/docs)                                     │
-└──────────┬───────────────────────────────┬──────────────────┘
-           │                               │
-           ▼                               ▼
-┌──────────────────────┐      ┌──────────────────────────────┐
-│   PostgreSQL 16      │      │      Redis 7                 │
-│   - pg_trgm FTS      │      │   - BullMQ Queue             │
-│   - GIN Indexes      │      │   - Job Management           │
-│   - Upsert Logic     │      │   - Rate Limiting            │
-└──────────────────────┘      └───────────┬──────────────────┘
-                                          │
-                                          ▼
-                              ┌──────────────────────────────┐
-                              │   Worker Pool (3x)           │
-                              │   - Selenium Browsers        │
-                              │   - Parallel Processing      │
-                              │   - Auto Retry               │
-                              └───────────┬──────────────────┘
-                                          │
-                                          ▼
-                              ┌──────────────────────────────┐
-                              │   SALIC System               │
-                              │   (Target Website)           │
-                              └──────────────────────────────┘
+└──────────┬──────────────────┬────────────┬──────────────────┘
+           │                  │            │
+           ▼                  ▼            ▼
+┌──────────────────┐  ┌──────────────┐  ┌──────────────────┐
+│  PostgreSQL 16   │  │   Redis 7    │  │  Observability   │
+│  - pg_trgm FTS   │  │  - Cache     │  │  - Prometheus    │
+│  - GIN Indexes   │  │  - BullMQ    │  │  - Grafana       │
+│  - Upsert Logic  │  │  - Jobs      │  │  - OpenTelemetry │
+└──────────────────┘  └──────┬───────┘  └──────────────────┘
+                             │
+                             ▼
+                  ┌──────────────────────────────┐
+                  │   Worker Pool (3x)           │
+                  │   - Selenium Browsers        │
+                  │   - Parallel Processing      │
+                  │   - Auto Retry               │
+                  │   - Metrics Tracking         │
+                  └───────────┬──────────────────┘
+                              │
+                              ▼
+                  ┌──────────────────────────────┐
+                  │   SALIC System               │
+                  │   (Target Website)           │
+                  └──────────────────────────────┘
 ```
 
 ### Data Flow
@@ -97,8 +99,14 @@ Documentation at `http://localhost:3000/docs`
    - Extract data from SALIC
    - Transform to DTO format
    - Upsert to PostgreSQL (batch 50)
-3. **API** serves data with FTS queries
+   - Invalidate cache
+   - Track metrics
+3. **API** serves data with:
+   - Cache check (Redis)
+   - FTS queries (PostgreSQL)
+   - Metrics collection
 4. **Scheduler** triggers daily at 2 AM
+5. **Monitoring** tracks all operations
 
 ## API Endpoints
 
@@ -204,6 +212,9 @@ DATABASE_URL="postgresql://user:pass@localhost:5432/salic_produtos"
 REDIS_HOST=localhost
 REDIS_PORT=6379
 
+# Cache
+CACHE_TTL=300
+
 # Application
 NODE_ENV=development
 PORT=3000
@@ -211,8 +222,15 @@ PORT=3000
 # Worker
 WORKER_CONCURRENCY=3
 
+# Scheduler
+CRON_SCHEDULE="0 2 * * *"
+
 # Security
 SCRAPER_SECRET_KEY=your-secret-key-here
+
+# Features
+ENABLE_SWAGGER=true
+ENABLE_CORS=true
 ```
 
 ## Development
@@ -267,13 +285,62 @@ See [Deployment Guide](docs/DEPLOYMENT.md) for complete instructions.
 - ✅ SQL injection prevention (Prisma ORM)
 - ✅ Input validation (JSON Schema)
 
+## Monitoring & Observability
+
+### Metrics Collection
+All key operations are instrumented with Prometheus metrics:
+- HTTP request/response times
+- Cache hit/miss rates
+- Database query durations
+- Scraper job success/failure rates
+- Worker performance metrics
+
+### Dashboards
+Pre-configured Grafana dashboards available at `http://localhost:3001`:
+- System overview
+- API performance
+- Cache effectiveness
+- Scraper job monitoring
+- Database query performance
+
+### Alerts (Recommended Setup)
+Configure alerts for:
+- Error rate > 5%
+- P95 response time > 2s
+- Cache hit rate < 70%
+- Scraper failure rate > 10%
+- Database connection issues
+
+See [Observability Guide](docs/OBSERVABILITY.md) for detailed setup.
+
+## CI/CD Pipeline
+
+Automated pipeline with GitHub Actions:
+
+### On Push/PR
+- TypeScript compilation check
+- Unit tests (19 suites, 209 tests)
+- Integration tests (Testcontainers)
+- Coverage report (92%+)
+- Security audit (npm audit)
+- Vulnerability scanning (Trivy)
+
+### On Main Branch
+- Multi-platform Docker build (amd64, arm64)
+- Push to Docker Hub
+- Automated versioning
+
 ## Documentation
 
+- [Quick Start Guide](QUICKSTART.md) - Get started in 5 minutes
 - [API Reference](docs/API.md) - Complete API documentation
 - [Architecture](docs/ARCHITECTURE.md) - System design details
 - [Database Schema](docs/DATABASE.md) - Schema & indexes
 - [Deployment](docs/DEPLOYMENT.md) - Production deployment guide
 - [Development](docs/DEVELOPMENT.md) - Contributing guidelines
+- [Observability](docs/OBSERVABILITY.md) - Monitoring, metrics & tracing
+- [Implementation Summary](IMPLEMENTATION_SUMMARY.md) - Recent features added
+- [Security Fixes](SECURITY_FIXES.md) - Security updates & fixes
 
 ## License
 
@@ -287,4 +354,4 @@ For issues and questions:
 
 ---
 
-Built with ❤️ using TypeScript, Fastify, and PostgreSQL
+**Production-ready web scraping and search system built with TypeScript, Fastify, PostgreSQL, and comprehensive observability.**

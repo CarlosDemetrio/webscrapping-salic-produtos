@@ -1,10 +1,7 @@
 import prisma from '../config/database';
 import { SearchFilters, SearchResult } from '../types/search.types';
+import metricsService from '../services/metrics.service';
 
-/**
- * Repository para acesso aos dados de ItemOrcamentario
- * Segue o padrão Repository para isolar lógica de acesso a dados
- */
 export class ItemRepository {
   /**
    * Busca itens usando Full Text Search com pg_trgm
@@ -47,10 +44,9 @@ export class ItemRepository {
     return this.mapResults(results);
   }
 
-  /**
-   * Conta o total de itens que correspondem aos filtros
-   */
   async countItems(filters: SearchFilters): Promise<number> {
+    const startTime = Date.now();
+
     const { searchTerm, uf, cidade } = filters;
     const { whereClause, params } = this.buildWhereClause(searchTerm, uf, cidade);
 
@@ -64,6 +60,9 @@ export class ItemRepository {
       countQuery,
       ...params
     );
+
+    const duration = (Date.now() - startTime) / 1000;
+    metricsService.databaseQueryDuration.observe({ operation: 'count' }, duration);
 
     return Number(result[0].total);
   }

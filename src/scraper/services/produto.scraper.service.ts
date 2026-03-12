@@ -14,7 +14,7 @@ export class ProdutoScraperService {
     private readonly driver: WebDriver,
     private readonly baseUrl: string
   ) {
-    this.pageScraperService = new PageScraperService(driver, baseUrl);
+    this.pageScraperService = new PageScraperService(this.driver, this.baseUrl);
   }
 
   /**

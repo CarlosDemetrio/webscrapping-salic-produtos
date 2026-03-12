@@ -15,6 +15,9 @@ export const config = {
   redisHost: process.env.REDIS_HOST || 'localhost',
   redisPort: parseInt(process.env.REDIS_PORT || '6379', 10),
 
+  // Cache
+  cacheTTL: parseInt(process.env.CACHE_TTL || '300', 10),
+
   // Worker
   workerConcurrency: parseInt(process.env.WORKER_CONCURRENCY || '3', 10),
 

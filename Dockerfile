@@ -3,6 +3,9 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# Install OpenSSL 3.x for Prisma compatibility
+RUN apk add --no-cache openssl3 libc6-compat
+
 # Copy package files
 COPY package*.json ./
 COPY tsconfig.json ./
@@ -24,6 +27,9 @@ RUN npm run build
 FROM node:20-alpine
 
 WORKDIR /app
+
+# Install OpenSSL 3.x for Prisma runtime compatibility
+RUN apk add --no-cache openssl3 libc6-compat
 
 # Copy package files
 COPY package*.json ./

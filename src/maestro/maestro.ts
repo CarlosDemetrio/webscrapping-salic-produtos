@@ -5,11 +5,6 @@ export async function enfileirarTodosProdutos(batchId: string) {
   const startTime = Date.now();
   const timestamp = new Date().toISOString();
 
-  console.log('MAESTRO - Enfileiramento de produtos');
-  console.log(`Batch ID: ${batchId}`);
-  console.log(`Timestamp: ${timestamp}`);
-  console.log(`Total de produtos: ${PRODUTOS.length}`);
-
   const jobsEnfileirados = [];
 
   try {
@@ -35,15 +30,9 @@ export async function enfileirarTodosProdutos(batchId: string) {
         produtoId: produto.id,
         produtoNome: produto.nome,
       });
-
-      console.log(`Enfileirado: ${produto.nome} (Job ID: ${job.id})`);
     }
 
     const tempoDecorrido = ((Date.now() - startTime) / 1000).toFixed(2);
-
-    console.log('Enfileiramento concluido');
-    console.log(`Tempo de enfileiramento: ${tempoDecorrido}s`);
-    console.log(`Jobs criados: ${jobsEnfileirados.length}`);
 
     return {
       success: true,
@@ -55,7 +44,6 @@ export async function enfileirarTodosProdutos(batchId: string) {
     };
 
   } catch (error) {
-    console.error('Erro ao enfileirar produtos:', error);
     throw error;
   }
 }
@@ -103,7 +91,6 @@ export async function obterStatusBatch(batchId: string) {
       timestamp: new Date().toISOString(),
     };
   } catch (error) {
-    console.error('Erro ao obter status do batch:', error);
     throw error;
   }
 }
@@ -113,14 +100,11 @@ export async function limparJobsAntigos() {
     await scraperQueue.clean(24 * 3600 * 1000, 100, 'completed');
     await scraperQueue.clean(7 * 24 * 3600 * 1000, 200, 'failed');
 
-    console.log('Jobs antigos limpos com sucesso');
-
     return {
       success: true,
       message: 'Jobs antigos removidos',
     };
   } catch (error) {
-    console.error('Erro ao limpar jobs antigos:', error);
     throw error;
   }
 }

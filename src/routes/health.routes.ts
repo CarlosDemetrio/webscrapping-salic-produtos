@@ -14,15 +14,15 @@ export default async function healthRoutes(fastify: FastifyInstance) {
         200: {
           type: 'object',
           properties: {
-            status: { type: 'string' },
-            timestamp: { type: 'string' },
-            phase: { type: 'string' },
+            status: { type: 'string', example: 'ok' },
+            timestamp: { type: 'string', format: 'date-time', example: '2026-03-12T10:30:00.000Z' },
+            phase: { type: 'string', example: 'FASE 4 - API REST e Busca FTS Implementada' },
           },
         },
       },
       tags: ['Health'],
-      description: 'Verifica o status de saúde da aplicação',
-      summary: 'Health check',
+      description: 'Verifica o status de saúde da aplicação e retorna informações sobre a fase atual de implementação',
+      summary: 'Health check da aplicação',
     },
   }, async () => {
     return {

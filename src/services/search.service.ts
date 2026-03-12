@@ -7,9 +7,6 @@ import { ValidationError } from '../errors/AppError';
  * Segue o padrão Service Layer para isolar regras de negócio
  */
 export class SearchService {
-  /**
-   * Valida e processa os parâmetros de busca
-   */
   private parseSearchQuery(query: SearchQuery): SearchFilters {
     const searchTerm = query.q?.trim() || '';
     const uf = query.uf?.trim().toUpperCase() || '';
@@ -33,9 +30,6 @@ export class SearchService {
     };
   }
 
-  /**
-   * Valida se pelo menos um critério de busca foi informado
-   */
   validateSearchCriteria(filters: SearchFilters): void {
     const { searchTerm, uf, cidade } = filters;
 
@@ -44,9 +38,6 @@ export class SearchService {
     }
   }
 
-  /**
-   * Calcula metadados de paginação
-   */
   private calculatePagination(
     page: number,
     limit: number,

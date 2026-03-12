@@ -8,6 +8,8 @@ import { ProdutoScraperService } from '../scraper/services/produto.scraper.servi
 import { SCRAPER_CONFIG } from '../scraper/config/scraper.config';
 import { ItemOrcamentarioDTO } from '../types/item.types';
 import { ItemExtraido as ItemExtraidoScraper } from '../scraper/types/scraper.types';
+import metricsService from '../services/metrics.service';
+import cacheService from '../services/cache.service';
 
 const CONCURRENCY = parseInt(process.env.WORKER_CONCURRENCY || '3', 10);
 
@@ -168,6 +170,14 @@ async function processScraperJob(job: Job<ScraperJobData>) {
 
     await job.updateProgress(100);
 
+    metricsService.scraperJobsTotal.inc({ status: 'completed' });
+    metricsService.scraperJobDuration.observe(
+      { job_type: 'produto_scrape' },
+      parseFloat(tempoDecorrido)
+    );
+
+    await cacheService.invalidateSearchCache();
+
     return {
       success: true,
       produtoId,
@@ -181,6 +191,11 @@ async function processScraperJob(job: Job<ScraperJobData>) {
     console.error(`ERRO no job ${job.id} (${produtoNome})`);
     console.error(`Tempo ate falha: ${tempoDecorrido}s`);
     console.error('Erro:', error);
+
+    metricsService.scraperJobsTotal.inc({ status: 'failed' });
+    metricsService.scraperJobsFailed.inc({
+      error_type: error instanceof Error ? error.name : 'unknown'
+    });
 
     throw error;
   }
